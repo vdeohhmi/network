@@ -4,52 +4,147 @@
   <meta charset="utf-8" />
   <title>Inventor Collaboration Network</title>
 
-  <!-- vis-network CSS & JS -->
-  <link
-    href="https://unpkg.com/vis-network@9.1.2/dist/vis-network.min.css"
-    rel="stylesheet"
-  />
-  <script
-    src="https://unpkg.com/vis-network@9.1.2/dist/vis-network.min.js"
-  ></script>
+  <!-- vis-network -->
+  <link href="https://unpkg.com/vis-network@9.1.2/dist/vis-network.min.css" rel="stylesheet" />
+  <script src="https://unpkg.com/vis-network@9.1.2/dist/vis-network.min.js"></script>
+
+  <!-- noUiSlider -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.0/nouislider.min.css" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.0/nouislider.min.js"></script>
 
   <style>
-    html, body {
-      margin: 0; padding: 0;
-      height: 100%; width: 100%;
-      overflow: hidden;
+    html, body { margin:0; padding:0; height:100%; width:100%; overflow:hidden; }
+    #network { width:100%; height:100%; background:#fff; }
+    #controls {
+      position:absolute; top:10px; left:10px; background:rgba(255,255,255,0.9);
+      padding:10px; border-radius:4px; font-family:sans-serif; z-index:2;
     }
-    #network {
-      width: 100%; height: 100%;
-      background: #ffffff;
+    #controls input, #controls button { margin:4px 0; width:180px; }
+    #weightSlider { margin:8px 0; }
+    #legend {
+      position:absolute; bottom:10px; left:10px; background:rgba(255,255,255,0.9);
+      padding:8px; border-radius:4px; font-family:sans-serif; max-height:200px;
+      overflow:auto; z-index:2;
     }
   </style>
 </head>
 <body>
+  <div id="controls">
+    <input id="search" placeholder="Search inventor..." />
+    <button id="clusterBtn">Cluster Communities</button>
+    <button id="resetBtn">Reset View</button>
+    <button id="fitBtn">Fit View</button>
+    <button id="exportBtn">Export PNG</button>
+    <div id="weightSlider"></div>
+    <div id="weightValue">Min Weight: 1</div>
+  </div>
+
   <div id="network"></div>
+  <div id="legend"></div>
+
   <script>
-    // placeholders → replaced by build_network.py
     var nodes = new vis.DataSet([]);
     var edges = new vis.DataSet([]);
 
-    var container = document.getElementById("network");
+    var allNodes = [], allEdges = [], groups = {};
+    var container = document.getElementById('network');
     var data = { nodes: nodes, edges: edges };
     var options = {
-      physics: {
-        barnesHut: {
-          gravitationalConstant: -5000,
-          centralGravity: 0.3,
-          springLength: 250,
-          damping: 0.95
-        }
+      edges: {
+        font: { align:'middle', size:14, color:'#555' },
+        smooth: { type:'curvedCW', roundness:0.2 }
       },
-      interaction: {
-        hover: true,
-        tooltipDelay: 100
-      }
+      physics: {
+        barnesHut: { gravitationalConstant:-5000, centralGravity:0.3, springLength:250, damping:0.95 }
+      },
+      interaction: { hover:true, tooltipDelay:100, hoverConnectedEdges:true }
     };
     var network = new vis.Network(container, data, options);
-    network.addControl("physics");
+
+    network.on('afterDrawing', function() {
+      if (!allNodes.length) {
+        // capture raw data once
+        allNodes = nodes.get();
+        allEdges = edges.get();
+        allNodes.forEach(n => groups[n.group] = n.color);
+
+        // build legend
+        var legend = document.getElementById('legend');
+        Object.keys(groups).forEach(g => {
+          var div = document.createElement('div');
+          div.innerHTML = '<span style="display:inline-block;width:12px;height:12px;background:'
+                          + groups[g]
+                          + ';margin-right:6px"></span>Community ' + g;
+          legend.appendChild(div);
+        });
+
+        // weight slider
+        var maxW = Math.max(...allEdges.map(e=>e.value));
+        noUiSlider.create(document.getElementById('weightSlider'), {
+          start:[1], connect:true, step:1,
+          range:{ min:1, max:maxW }
+        }).on('update', function(vals){
+          var minW = +vals[0];
+          document.getElementById('weightValue').innerText = 'Min Weight: ' + minW;
+          edges.clear();
+          edges.add(allEdges.filter(e=>e.value>=minW));
+        });
+      }
+    });
+
+    // Search
+    document.getElementById('search').addEventListener('input', function(){
+      var term = this.value.toLowerCase();
+      var found = allNodes.filter(n => n.label.toLowerCase().includes(term)).map(n=>n.id);
+      network.selectNodes(found);
+      if (found.length) network.focus(found[0], { scale:1.5 });
+    });
+
+    // Cluster / Reset
+    var clusterIds = [];
+    document.getElementById('clusterBtn').onclick = function(){
+      Object.keys(groups).forEach(g=>{
+        var opts = {
+          joinCondition: function(child){ return child.group === +g; },
+          clusterNodeProperties: {
+            id: 'cluster:' + g,
+            label: 'Community ' + g,
+            shape: 'box',
+            color: groups[g],
+            font: { color:'#fff' }
+          }
+        };
+        var cid = network.cluster(opts);
+        clusterIds.push(cid);
+      });
+    };
+    document.getElementById('resetBtn').onclick = function(){
+      clusterIds.forEach(cid=>network.openCluster(cid));
+      clusterIds = [];
+      nodes.clear(); edges.clear();
+      nodes.add(allNodes); edges.add(allEdges);
+      network.fit();
+    };
+
+    // Fit
+    document.getElementById('fitBtn').onclick = ()=>network.fit();
+
+    // Export PNG
+    document.getElementById('exportBtn').onclick = function(){
+      var canvas = document.querySelector('canvas');
+      var dataURL = canvas.toDataURL('image/png');
+      var link = document.createElement('a');
+      link.href = dataURL; link.download = 'network.png';
+      link.click();
+    };
+
+    // Hover highlighting
+    network.on('hoverEdge', function(params){
+      edges.update({ id:params.edge, font:{ color:'#000', size:16 } });
+    });
+    network.on('blurEdge', function(params){
+      edges.update({ id:params.edge, font:{ color:'#555', size:14 } });
+    });
   </script>
 </body>
 </html>
