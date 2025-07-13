@@ -12,7 +12,6 @@
   <style>
     html, body { margin:0; padding:0; height:100%; width:100%; overflow:hidden; }
     #network { width:100%; height:100%; background:#fff; }
-
     #controls {
       position:absolute; top:10px; left:10px;
       background:rgba(255,255,255,0.9);
@@ -22,7 +21,6 @@
     #controls input, #controls button { margin:4px 0; width:180px; }
     #weightSlider { margin:8px 0; }
     #weightValue { font-size:0.9em; }
-
     #legend {
       position:absolute; bottom:10px; left:10px;
       background:rgba(255,255,255,0.9);
@@ -30,7 +28,6 @@
       font-family:sans-serif; max-height:200px; overflow:auto;
       z-index:2;
     }
-
     #description {
       position:absolute; top:10px; right:10px;
       width:250px;
@@ -45,8 +42,6 @@
 <body>
   <div id="controls">
     <input id="search" placeholder="Search inventor..." />
-    <button id="clusterBtn">Cluster Communities</button>
-    <button id="resetBtn">Reset View</button>
     <button id="fitBtn">Fit View</button>
     <button id="exportBtn">Export PNG</button>
     <div id="weightSlider"></div>
@@ -55,7 +50,7 @@
 
   <div id="description">
     <h3>Graph Overview</h3>
-    <p>This network shows co-inventor collaborations. Nodes are inventors; edges show number of shared patents. Hover an edge to see the exact collaboration count. Use controls to filter, cluster, search, and export.</p>
+    <p>This network shows co-inventor collaborations. Nodes are inventors; edges show number of shared patents. Hover an edge to see the exact collaboration count. Use controls to filter, search, and export.</p>
   </div>
 
   <div id="network"></div>
@@ -108,44 +103,22 @@
       var term = this.value.toLowerCase();
       var found = allNodes.filter(n => n.label.toLowerCase().includes(term)).map(n=>n.id);
       network.selectNodes(found);
-      if(found.length) network.focus(found[0], { scale:1.5 });
+      if (found.length) network.focus(found[0], { scale:1.5 });
     });
 
-    var clusterIds = [];
-    document.getElementById('clusterBtn').onclick = function(){
-      Object.keys(groups).forEach(g=>{
-        var cid = network.cluster({
-          joinCondition: child => child.group===+g,
-          clusterNodeProperties: {
-            id:'cluster:'+g,
-            label:'Community '+g,
-            shape:'box',
-            color:groups[g],
-            font:{color:'#fff'}
-          }
-        });
-        clusterIds.push(cid);
-      });
-    };
-    document.getElementById('resetBtn').onclick = function(){
-      clusterIds.forEach(id=>network.openCluster(id));
-      clusterIds=[];
-      nodes.clear(); edges.clear();
-      nodes.add(allNodes); edges.add(allEdges);
-      network.fit();
-    };
-    document.getElementById('fitBtn').onclick = ()=>network.fit();
+    document.getElementById('fitBtn').onclick = () => network.fit();
+
     document.getElementById('exportBtn').onclick = function(){
-      var d=container.querySelector('canvas').toDataURL('image/png'),
-          a=document.createElement('a');
-      a.href=d; a.download='network.png'; a.click();
+      var d = container.querySelector('canvas').toDataURL('image/png'),
+          a = document.createElement('a');
+      a.href = d; a.download = 'network.png'; a.click();
     };
 
-    network.on('hoverEdge', params=>{
-      edges.update({ id:params.edge, font:{color:'#000', size:16} });
+    network.on('hoverEdge', params => {
+      edges.update({ id: params.edge, font:{ color:'#000', size:16 } });
     });
-    network.on('blurEdge', params=>{
-      edges.update({ id:params.edge, font:{color:'#555', size:14} });
+    network.on('blurEdge', params => {
+      edges.update({ id: params.edge, font:{ color:'#555', size:14 } });
     });
   </script>
 </body>
