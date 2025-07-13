@@ -3,50 +3,124 @@
 <head>
   <meta charset="utf-8" />
   <title>Inventor Collaboration Network</title>
+
   <link href="https://unpkg.com/vis-network@9.1.2/dist/vis-network.min.css" rel="stylesheet" />
   <script src="https://unpkg.com/vis-network@9.1.2/dist/vis-network.min.js"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.0/nouislider.min.css" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.0/nouislider.min.js"></script>
+
   <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      width: 100%;
-      overflow: hidden;
+    html, body { margin:0; padding:0; height:100%; width:100%; overflow:hidden; }
+    #network { width:100%; height:100%; background:#fff; }
+    #controls {
+      position:absolute; top:10px; left:10px;
+      background:rgba(255,255,255,0.9);
+      padding:10px; border-radius:4px;
+      font-family:sans-serif; z-index:2;
     }
-    #network {
-      width: 100%;
-      height: 100%;
-      background: #ffffff;
+    #controls input, #controls button { margin:4px 0; width:180px; }
+    #weightSlider { margin:8px 0; }
+    #weightValue { font-size:0.9em; }
+    #legend {
+      position:absolute; bottom:10px; left:10px;
+      background:rgba(255,255,255,0.9);
+      padding:8px; border-radius:4px;
+      font-family:sans-serif; max-height:200px; overflow:auto;
+      z-index:2;
     }
+    #description {
+      position:absolute; top:10px; right:10px;
+      width:260px;
+      background:rgba(255,255,255,0.9);
+      padding:10px; border-radius:4px;
+      font-family:sans-serif; z-index:2;
+    }
+    #description h3 { margin:0 0 4px; font-size:1.1em; }
+    #description p { margin:0; font-size:0.9em; line-height:1.3; }
   </style>
 </head>
 <body>
+  <div id="controls">
+    <input id="search" placeholder="Search inventor..." />
+    <button id="fitBtn">Fit View</button>
+    <button id="exportBtn">Export PNG</button>
+    <div id="weightSlider"></div>
+    <div id="weightValue">Min Weight: 1</div>
+  </div>
+
+  <div id="description">
+    <h3>Graph Overview</h3>
+    <p>
+      This network shows co-inventor collaborations (top 80 by degree). Nodes are inventors; edges show how many patents they share. Hover an edge to see the exact count, use your mouse scroll wheel to zoom in/out, and drag to pan. Use the controls to filter, search, fit view, and export.
+    </p>
+  </div>
+
   <div id="network"></div>
+  <div id="legend"></div>
+
   <script>
-    var nodes = new vis.DataSet([
-      /* insert your nodes array here */
-    ]);
-    var edges = new vis.DataSet([
-      /* insert your edges array here */
-    ]);
-    var container = document.getElementById("network");
+    var nodes = new vis.DataSet([]);
+    var edges = new vis.DataSet([]);
+    var allNodes = [], allEdges = [], groups = {};
+    var container = document.getElementById('network');
     var data = { nodes: nodes, edges: edges };
     var options = {
-      physics: {
-        barnesHut: {
-          gravitationalConstant: -5000,
-          centralGravity: 0.3,
-          springLength: 250,
-          damping: 0.95
-        }
+      edges: {
+        font: { align:'middle', size:14, color:'#555' },
+        smooth: { type:'curvedCW', roundness:0.2 }
       },
-      interaction: {
-        hover: true,
-        tooltipDelay: 100
-      }
+      physics: {
+        barnesHut: { gravitationalConstant:-5000, centralGravity:0.3, springLength:250, damping:0.95 }
+      },
+      interaction: { hover:true, tooltipDelay:100, hoverConnectedEdges:true }
     };
     var network = new vis.Network(container, data, options);
-    network.addControl("physics");
+
+    network.once('afterDrawing', function() {
+      allNodes = nodes.get();
+      allEdges = edges.get();
+      allNodes.forEach(n => groups[n.group] = n.color);
+
+      var legend = document.getElementById('legend');
+      Object.keys(groups).forEach(g => {
+        var d = document.createElement('div');
+        d.innerHTML = '<span style="display:inline-block;width:12px;height:12px;background:' +
+                      groups[g] +
+                      ';margin-right:6px"></span>Community ' + g;
+        legend.appendChild(d);
+      });
+
+      var maxW = Math.max(...allEdges.map(e=>e.value));
+      noUiSlider.create(document.getElementById('weightSlider'), {
+        start:[1], connect:true, step:1, range:{ min:1, max:maxW }
+      }).on('update', function(vals){
+        var m = +vals[0];
+        document.getElementById('weightValue').innerText = 'Min Weight: ' + m;
+        edges.clear();
+        edges.add(allEdges.filter(e=>e.value>=m));
+      });
+    });
+
+    document.getElementById('search').addEventListener('input', function(){
+      var term = this.value.toLowerCase();
+      var found = allNodes.filter(n => n.label.toLowerCase().includes(term)).map(n=>n.id);
+      network.selectNodes(found);
+      if (found.length) network.focus(found[0], { scale:1.5 });
+    });
+
+    document.getElementById('fitBtn').onclick = () => network.fit();
+    document.getElementById('exportBtn').onclick = function(){
+      var d = container.querySelector('canvas').toDataURL('image/png'),
+          a = document.createElement('a');
+      a.href = d; a.download = 'network.png'; a.click();
+    };
+
+    network.on('hoverEdge', params => {
+      edges.update({ id: params.edge, font:{ color:'#000', size:16 } });
+    });
+    network.on('blurEdge', params => {
+      edges.update({ id: params.edge, font:{ color:'#555', size:14 } });
+    });
   </script>
 </body>
 </html>
