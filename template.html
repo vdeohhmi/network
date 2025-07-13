@@ -30,13 +30,13 @@
     }
     #description {
       position:absolute; top:10px; right:10px;
-      width:250px;
+      width:260px;
       background:rgba(255,255,255,0.9);
       padding:10px; border-radius:4px;
       font-family:sans-serif; z-index:2;
     }
-    #description h3 { margin:0 0 4px; font-size:1.1em; }
-    #description p { margin:0; font-size:0.9em; }
+    #description h3 { margin:0 0 6px; font-size:1.1em; }
+    #description p { margin:0; font-size:0.9em; line-height:1.4; }
   </style>
 </head>
 <body>
@@ -50,7 +50,9 @@
 
   <div id="description">
     <h3>Graph Overview</h3>
-    <p>This network shows co-inventor collaborations. Nodes are inventors; edges show number of shared patents. Hover an edge to see the exact collaboration count. Use controls to filter, search, and export.</p>
+    <p>
+      Top 80 HHMI inventors by co-patent count. Nodes represent inventors; edges show how many patents they share. <strong>Scroll</strong> to zoom, <strong>drag</strong> to pan, and <strong>hover</strong> an edge to see the exact collaboration count. Use the search box to find inventors, the slider to filter by weight, and export your view.
+    </p>
   </div>
 
   <div id="network"></div>
@@ -70,13 +72,18 @@
       physics: {
         barnesHut: { gravitationalConstant:-5000, centralGravity:0.3, springLength:250, damping:0.95 }
       },
-      interaction: { hover:true, tooltipDelay:100, hoverConnectedEdges:true }
+      interaction: {
+        hover: true,
+        tooltipDelay: 100,
+        hoverConnectedEdges: true,
+        zoomView: true,
+        dragView: true
+      }
     };
     var network = new vis.Network(container, data, options);
 
     network.once('afterDrawing', function() {
-      allNodes = nodes.get();
-      allEdges = edges.get();
+      allNodes = nodes.get(); allEdges = edges.get();
       allNodes.forEach(n => groups[n.group] = n.color);
 
       var legend = document.getElementById('legend');
@@ -107,7 +114,6 @@
     });
 
     document.getElementById('fitBtn').onclick = () => network.fit();
-
     document.getElementById('exportBtn').onclick = function(){
       var d = container.querySelector('canvas').toDataURL('image/png'),
           a = document.createElement('a');
